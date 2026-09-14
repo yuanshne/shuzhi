@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#070c16">
+<!-- 后端地址：留空 = 同源（后端同时托管前端时用）。填了就优先用它，也可用 ?api= 临时覆盖 -->
+<meta name="puzzle-api" content="">
 <title>数织·奇想 · Nonogram</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1526'/%3E%3Crect x='5' y='5' width='7' height='7' rx='1.5' fill='%23d3bc8e'/%3E%3Crect x='13' y='5' width='7' height='7' rx='1.5' fill='%23556'/%3E%3Crect x='21' y='5' width='6' height='7' rx='1.5' fill='%23d3bc8e'/%3E%3Crect x='5' y='13' width='7' height='7' rx='1.5' fill='%23556'/%3E%3Crect x='13' y='13' width='7' height='7' rx='1.5' fill='%23d3bc8e'/%3E%3Crect x='5' y='21' width='7' height='7' rx='1.5' fill='%23d3bc8e'/%3E%3Crect x='13' y='21' width='7' height='7' rx='1.5' fill='%23556'/%3E%3Crect x='21' y='21' width='6' height='7' rx='1.5' fill='%23d3bc8e'/%3E%3C/svg%3E">
 <style>
@@ -141,6 +143,46 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
 #confetti i{position:absolute; top:-4vh; width:9px; height:14px; border-radius:2px; opacity:.95; animation:fall linear forwards;}
 @keyframes fall{to{transform:translate3d(var(--dx),108vh,0) rotate(var(--rz)); opacity:.6;}}
 
+/* ===== 联机（账号 / 榜单） =====
+   联机是附加品：探测不通、没登录、令牌过期，任何一种都只让榜单那部分消失，
+   棋盘照常能玩。所以这里的样式一律不参与布局计算，只做显示。 */
+.ndot{width:7px; height:7px; border-radius:50%; background:var(--tx3); display:inline-block; flex:none;
+  box-shadow:0 0 0 3px rgba(133,122,99,.16); transition:.2s;}
+.ndot.on{background:var(--acc); box-shadow:0 0 0 3px rgba(224,193,132,.2);}
+.ndot.live{background:#7fe0b0; box-shadow:0 0 8px rgba(127,224,176,.8); animation:ndotBlip 1.6s infinite;}
+.ndot.bad{background:var(--danger); box-shadow:0 0 0 3px rgba(229,138,118,.2);}
+@keyframes ndotBlip{0%,100%{opacity:1;} 50%{opacity:.4;}}
+#btnOnline{display:inline-flex; align-items:center; gap:6px;}
+.fld{display:block; margin:11px 0;}
+.fld span{display:block; font-size:11px; letter-spacing:.09em; color:var(--tx3); margin-bottom:5px;}
+.fld input{width:100%; padding:9px 11px; border-radius:9px; border:1px solid var(--line); background:rgba(8,12,22,.6);
+  color:var(--tx); font-family:var(--cjk); font-size:13px; outline:none; transition:.16s;}
+.fld input:focus{border-color:var(--line2); background:rgba(224,193,132,.06);}
+.fld input::placeholder{color:rgba(133,122,99,.72);}
+.hintline{font-size:11.5px; color:var(--tx3); line-height:1.7; margin:8px 0 0;}
+.msg{font-size:12.5px; line-height:1.7; margin-top:12px; min-height:1.2em; color:var(--tx3);}
+.msg.ok{color:#8fd6a8;}
+.msg.bad{color:var(--danger);}
+.actions{display:flex; gap:10px; margin-top:14px;}
+.me{border-top:1px solid var(--line); margin-top:14px; padding-top:12px; font-size:13px; color:var(--tx2);}
+.me b{color:var(--gold2); font-family:var(--num);}
+.boardtabs{display:flex; gap:8px; margin:2px 0 12px;}
+.boardtabs .btn{padding:8px;}
+.boardtabs .btn.on{background:linear-gradient(180deg,#f0e2c0,#c9ab74); border-color:transparent; color:var(--ink); font-weight:800;}
+.lb{list-style:none; margin:0; padding:0; max-height:min(46vh,340px); overflow:auto;}
+.lb li{display:flex; align-items:center; gap:10px; padding:9px 10px; border-bottom:1px solid rgba(211,188,142,.12); font-size:13px;}
+.lb li.me{background:rgba(224,193,132,.12); border-bottom-color:transparent; border-radius:8px;}
+.lb .rk{font-family:var(--num); color:var(--tx3); width:36px; flex:none;}
+.lb li:nth-child(1) .rk{color:var(--gold2);}
+.lb li:nth-child(2) .rk, .lb li:nth-child(3) .rk{color:var(--gold);}
+.lb .nm{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--tx);}
+.lb .tm{font-family:var(--num); color:var(--gold2); font-size:12.5px; font-variant-numeric:tabular-nums;}
+.lb .empty{justify-content:center; color:var(--tx3); font-size:12.5px; padding:22px 0;}
+.lbmeta{font-size:11.5px; color:var(--tx3); margin-top:10px; text-align:center; letter-spacing:.5px;}
+.win-online{text-align:center; font-size:12px; color:var(--tx2); margin-top:9px; min-height:1.2em; letter-spacing:.5px;}
+.win-online b{color:var(--gold2); font-family:var(--num);}
+.win-online.bad{color:var(--danger);}
+
 /* 画廊 */
 #galleryGrid{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:6px;}
 .gal-item{border:1px solid var(--line); border-radius:10px; padding:8px; cursor:pointer; transition:.16s; text-align:center; background:rgba(10,15,28,.5);}
@@ -188,10 +230,14 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
     <button data-mode="daily">每日<i>DAILY</i></button>
   </nav>
   <div class="hright">
+    <button id="btnOnline" class="icon-btn" title="登录后可参与服务端排名">
+      <span class="ndot" id="netDot"></span><span id="netLabel">联机</span>
+    </button>
+    <button id="btnBoard" class="icon-btn" title="排行榜">🏆</button>
     <button id="btnGallery" class="icon-btn" title="画廊">🖼</button>
     <button id="btnSound" class="icon-btn" title="音效开关">🔊</button>
     <button id="btnHelp" class="icon-btn" title="玩法说明">?</button>
-    <a class="icon-btn" href="index.html" title="返回魔方数独">⌂</a>
+    <a class="icon-btn" href="https://github.com/yuanshne/shudu3d" title="姊妹项目：立方数独" target="_blank" rel="noopener">⌂</a>
   </div>
 </header>
 
@@ -266,10 +312,62 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
       <div><b id="winHints">0</b><span>提示</span></div>
       <div><b id="winSize">10×10</b><span>规格</span></div>
     </div>
+    <div class="win-online" id="winOnline" hidden></div>
     <div class="row">
       <button class="btn primary" id="btnAgain">再来一局</button>
       <button class="btn" id="btnToGallery">画廊</button>
     </div>
+  </div>
+</div>
+
+<div class="modal" id="modalOnline">
+  <div class="card">
+    <h2>联机<span class="en" style="font-family:var(--serif); font-size:11px; color:var(--gold); letter-spacing:3px; margin-left:8px;">ONLINE</span></h2>
+    <div class="hintline" style="margin:0 0 4px;">登录后每日挑战由服务端统一出题、计时，成绩进实时排行榜。不登录照常单机玩。</div>
+
+    <label class="fld">
+      <span>服务器地址</span>
+      <input id="inApi" spellcheck="false" placeholder="留空 = 同源；例：http://127.0.0.1:8077">
+    </label>
+    <p class="hintline" id="apiHint">地址会在失焦时保存，下次打开自动连。</p>
+
+    <div id="onlineForm">
+      <label class="fld"><span>用户名</span><input id="inUser" spellcheck="false" autocomplete="username" placeholder="3~24 位字母、数字或下划线"></label>
+      <label class="fld"><span>密码</span><input id="inPass" type="password" autocomplete="current-password" placeholder="至少 6 位"></label>
+      <div class="actions">
+        <button class="btn" id="btnRegister">注册</button>
+        <button class="btn primary" id="btnLogin">登录</button>
+      </div>
+    </div>
+
+    <div class="me" id="onlineMe" hidden>
+      当前账号 <b id="meName">—</b>
+      <div class="actions">
+        <button class="btn" id="btnCheckToken">校验令牌</button>
+        <button class="btn" id="btnLogout">退出登录</button>
+      </div>
+    </div>
+
+    <div class="msg" id="onlineMsg"></div>
+    <div class="actions"><button class="btn primary" id="btnCloseOnline">关闭</button></div>
+  </div>
+</div>
+
+<div class="modal" id="modalBoard">
+  <div class="card">
+    <h2>数织·奇想 · 排行榜<span class="en" style="font-family:var(--serif); font-size:11px; color:var(--gold); letter-spacing:3px; margin-left:8px;">RANKING</span></h2>
+    <div class="hintline" id="boardSub" style="margin:0 0 12px;">按用时排名，快者在前（同分并列）</div>
+    <div class="boardtabs">
+      <button class="btn on" id="tabClassic">经典</button>
+      <button class="btn" id="tabMosaik">马赛克</button>
+    </div>
+    <div class="boardtabs">
+      <button class="btn on" id="tabDaily">今日</button>
+      <button class="btn" id="tabAll">历史总榜</button>
+    </div>
+    <ol class="lb" id="lbList"><li class="empty">正在拉取…</li></ol>
+    <div class="lbmeta" id="lbMeta">—</div>
+    <div class="actions"><button class="btn primary" id="btnCloseBoard">关闭</button></div>
   </div>
 </div>
 
@@ -279,6 +377,7 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
 <script>
 /*__ART__*/
 </script>
+<script>/*__CLIENT__*/</script>
 <script>
 'use strict';
 /* ================= 工具 ================= */
@@ -338,6 +437,7 @@ const S={
   sol:[], grid:[],           // sol: 0/1 目标；grid: 0 空 1 填 2 标记
   rowClues:[], colClues:[], clues:[],
   key:'', name:'', mosaik:false, daily:false, dk:null, artOf:null,
+  onlineId:null, onlineVariant:null,   // 服务端下发的题目 id；非空表示这局成绩可以上榜
   strikes:0, hints:0, elapsed:0, t0:0, running:false, done:false,
   paintVal:1, painting:false, demoBusy:false,
 };
@@ -384,11 +484,12 @@ function startPuzzle(cfg){
   S.mode=cfg.mode; S.w=cfg.w; S.h=cfg.h;
   S.sol=cfg.sol.slice(); S.mosaik=!!cfg.mosaik; S.daily=!!cfg.daily;
   S.key=cfg.key||''; S.name=cfg.name||''; S.artOf=cfg.art||null; S.dk=cfg.dk||null;
+  S.onlineId=cfg.onlineId||null; S.onlineVariant=cfg.onlineVariant||null;
   // 两种模式的线索结构不同，必须各自显式重置，否则切换模式时会留着上一局的残留线索
   if(S.mosaik){ S.clues=cfg.clues; S.rowClues=[]; S.colClues=[]; }
   else { S.rowClues=cfg.rowClues; S.colClues=cfg.colClues; S.clues=[]; }
   S.grid=new Array(S.w*S.h).fill(0);
-  S.strikes=0; S.hints=0; S.elapsed=0; S.running=false; S.done=false; S._toldPairs=false;
+  S.strikes=0; S.hints=0; S.elapsed=0; S.t0=0; S.running=false; S.done=false; S._toldPairs=false;
   $('#puzzleName').textContent=puzzleTitle();
   // 每日挑战的底层是经典/马赛克，但「每日」这一档必须保持高亮，否则点完就看不到自己在哪一档
   document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===(S.daily?'daily':S.mode)));
@@ -525,7 +626,12 @@ function applyPaint(i){
 function checkWin(){
   if(S.done) return;
   for(let i=0;i<S.sol.length;i++) if(S.sol[i]===1&&S.grid[i]!==1) return;
-  S.done=true; S.running=false; S.elapsed=Date.now()-S.t0;
+  // 计时是从「第一次动手」开始的（startTimer 在交互里调），所以有可能整局都没启动过 ——
+  // 比如调试 API 一次填满、或全靠提示推完。这时没有起点可用，耗时记 0；
+  // 旧实现直接拿 Date.now() 减掉初始的 0，记出来的最佳成绩是天文数字。
+  const wasRunning=S.running;
+  S.done=true; S.running=false;
+  S.elapsed=wasRunning?Date.now()-S.t0:(S.elapsed||0);
   sfx('win'); confetti();
   const base=300+S.sol.filter(v=>v===1).length*20;
   const score=Math.max(50, Math.round(base - S.elapsed/1000*2 - S.strikes*100 - S.hints*50));
@@ -547,6 +653,7 @@ function checkWin(){
   if(S.artOf) SAVE.solved[S.artOf]=true;
   $('#winBest').hidden=!isNew;
   saveNow(); hudRefresh();
+  netAfterWin();   // 在线局：把成绩交给服务端判定（离线局静默跳过）
   setTimeout(()=>{ $('#modalWin').classList.add('show'); renderGallery(); },500);
 }
 
@@ -627,12 +734,34 @@ async function demo(){
 /* ================= 每日挑战 ================= */
 function ymd(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
 function dailyKey(d){ return 'd'+ymd(d||new Date()); }
-// 种子必须过一遍 NG.hashSeed：'d20260914' 直接喂给 mulberry32 会被 `>>> 0` 变成 0，
-// 那样每天的种子都一样，「全服同题」就退化成「全服永远同一题」（实测：隔一天就重复）。
+function dailyToast(dk){
+  const rec=SAVE.daily[dk];
+  return rec&&rec.done
+    ? `今日已完成 · 最佳 ${fmtT(rec.best)}${rec.plays>1?` · 累计挑战 ${rec.plays} 次`:''}`
+    : '今日挑战 · 全服同题';
+}
+// 服务端优先：题面（不含答案）由后端下发，本地用引擎就地还原一份解。
+// 游客也能领题，所以未登录一样走这条路；只有后端完全连不上才落回本地定种子。
 function startDaily(when){
   const date=(when instanceof Date)?when:new Date();
   const dk=dailyKey(date);
   const mode=(date.getDay()%2===0)?'classic':'mosaik';
+  const stamp=String(ymd(date)).replace(/(\d{4})(\d{2})(\d{2})/,'$1.$2.$3');
+  return netFetchDaily(mode).then((online)=>{
+    if(!online){ startDailyLocal(dk,mode,stamp); return; }
+    startPuzzle({mode:online.mode, sol:online.sol, rowClues:online.rowClues, colClues:online.colClues,
+      clues:online.clues, w:online.w, h:online.h, name:stamp, key:'daily-'+dk, daily:true,
+      mosaik:online.mode==='mosaik', dk, onlineId:online.puzzleId, onlineVariant:online.variant});
+    const rec=SAVE.daily[dk];
+    toast(rec&&rec.done
+      ? `今日已完成 · 最佳 ${fmtT(rec.best)}${rec.plays>1?` · 累计挑战 ${rec.plays} 次`:''}`
+      : '今日挑战 · 服务端出题', rec&&rec.done?2600:1600);
+  });
+}
+// 离线兜底：种子只跟日期有关，所以「全服同题」在没后端时依然成立。
+// 种子必须过一遍 NG.hashSeed：'d20260914' 直接喂给 mulberry32 会被 `>>> 0` 变成 0，
+// 那样每天的种子都一样，就退化成「全服永远同一题」了（实测：隔一天就重复）。
+function startDailyLocal(dk,mode,stamp){
   const rng=NG.mulberry32(NG.hashSeed(dk));
   const wh=mode==='classic'?10:8;
   let g=null;
@@ -647,13 +776,8 @@ function startDaily(when){
   }
   if(!g){ toast('今日谜题生成失败'); return; }
   startPuzzle({mode, sol:g.sol, rowClues:g.rowClues, colClues:g.colClues, clues:g.clues, w:wh, h:wh,
-    name:String(ymd(date)).replace(/(\d{4})(\d{2})(\d{2})/,'$1.$2.$3'),
-    key:'daily-'+dk, daily:true, mosaik:mode==='mosaik', dk});
-  // 存档里每天都写 done / best / plays，但以前从来没被读过——现在把它显示出来
-  const rec=SAVE.daily[dk];
-  toast(rec&&rec.done
-    ? `今日已完成 · 最佳 ${fmtT(rec.best)}${rec.plays>1?` · 累计挑战 ${rec.plays} 次`:''}`
-    : '今日挑战 · 全服同题',rec&&rec.done?2600:1600);
+    name:stamp, key:'daily-'+dk, daily:true, mosaik:mode==='mosaik', dk});
+  toast(dailyToast(dk), SAVE.daily[dk]&&SAVE.daily[dk].done?2600:1600);
 }
 
 /* ================= 画廊 ================= */
@@ -709,6 +833,366 @@ function confetti(){
   }
 }
 
+/* ================= 联机（账号 / 每日挑战 / 实时榜单） =================
+   联机是加成，不是前提 —— 探测失败、没登录、令牌过期、交卷超时，
+   任何一种都只让榜单那部分消失，棋盘照常能玩。
+
+   在线每日挑战的题面由服务端下发，但不含答案；本地用引擎的求解器
+   就地还原一份，只为保住「填错当场闪红」的手感。真正的判定在服务端。
+   ================================================================== */
+const API_KEY='nonogram.api';
+
+const Net={
+  client:null, ready:false, probePromise:null, snapshot:null,
+  scope:'daily', variant:'classic', stopWs:null, wsState:null,
+  lastError:'', solveMs:null, lastSubmit:null,
+};
+
+/** 后端地址解析顺序：?api= → localStorage → <meta name="puzzle-api"> → 空（= 同源） */
+function readApiBase(){
+  let q=null;
+  try{ q=new URLSearchParams(location.search).get('api'); }catch(_){}
+  if(q!==null){ const v=q.trim().replace(/\/+$/,''); netSaveApi(v); return v; }
+  try{ const v=localStorage.getItem(API_KEY); if(v) return v.replace(/\/+$/,''); }catch(_){}
+  const m=document.querySelector('meta[name="puzzle-api"]');
+  return m&&m.content?m.content.trim().replace(/\/+$/,''):'';
+}
+function netSaveApi(url){
+  try{ if(url) localStorage.setItem(API_KEY,url); else localStorage.removeItem(API_KEY); }catch(_){}
+}
+function netErrText(err){
+  if(!err) return '未知错误';
+  if(err.status===0) return '连不上服务器（地址不对或后端没起）';
+  if(err.status===401) return '登录已过期，请重新登录';
+  if(err.status===404) return '服务端没有这道题（题池可能没灌）';
+  if(err.status===429) return '操作太频繁，歇一下再试';
+  if(err.status>=500) return '服务端出错（HTTP '+err.status+'）';
+  return err.message||('HTTP '+err.status);
+}
+function fmtElapsedMs(ms){
+  if(window.PuzzleClient&&window.PuzzleClient.formatElapsed) return window.PuzzleClient.formatElapsed(ms);
+  return ms==null?'—':(ms/1000).toFixed(1)+'s';
+}
+/** 把联机状态画到顶栏那个小圆点上。不联网时就是灰的，不吵人。 */
+function netPaint(){
+  const dot=$('#netDot'), label=$('#netLabel');
+  if(!dot||!label) return;
+  if(!Net.client){ dot.className='ndot'; label.textContent='离线'; return; }
+  const logged=Net.client.isLoggedIn();
+  let cls='ndot';
+  if(!Net.ready) cls+=Net.lastError?' bad':'';
+  else cls+=logged?' live':' on';
+  dot.className=cls;
+  const who=Net.client.username();
+  if(!Net.ready) label.textContent='离线';
+  else if(!logged) label.textContent='联机';
+  else label.textContent=who&&who.length>8?who.slice(0,7)+'…':(who||'已登录');
+}
+function netMsg(text,kind){
+  const m=$('#onlineMsg'); if(!m) return;
+  m.textContent=text||''; m.className='msg'+(kind?' '+kind:'');
+}
+function netSyncOnlineUI(){
+  const box=$('#onlineMe'), form=$('#onlineForm');
+  if(!box||!form) return;
+  const logged=!!(Net.client&&Net.client.isLoggedIn());
+  form.hidden=logged; box.hidden=!logged;
+  $('#meName').textContent=logged?(Net.client.username()||'—'):'—';
+  const hint=$('#apiHint'), base=Net.client.options.baseUrl;
+  let fileProto=false;
+  try{ fileProto=location.protocol==='file:'; }catch(_){}
+  if(Net.ready) hint.textContent='已连上 '+(base||'同源地址')+'。';
+  else if(fileProto&&!base) hint.textContent='本页是直接打开的文件，同源地址不可用，得填上后端地址（例：http://127.0.0.1:8077）才能联机。';
+  else hint.textContent='还没连上 '+(base||'同源地址')+'。填好地址后点「登录」会再试一次。';
+}
+/* 这一页到底有没有探测的必要。
+   双击 index.html 打开时协议是 file:，此时「同源」等于 file:///api/...，
+   浏览器必然按 CORS 拦掉并在控制台留一条红字。既然结果注定，就别发这个请求 ——
+   单文件离线玩法不该背一条无意义的报错。填了后端地址的话照常探。 */
+function netProbePossible(){
+  if(!Net.client) return false;
+  if(Net.client.options.baseUrl) return true;
+  try{ return /^https?:$/.test(location.protocol); }catch(_){ return false; }
+}
+/** 探一次后端在不在。同一个 Promise 会被并发的调用方共用，避免点一下按钮打出一串请求。 */
+function netProbe(force){
+  if(!netProbePossible()){
+    Net.ready=false; Net.lastError='';
+    netPaint(); netSyncOnlineUI();
+    return Promise.resolve(false);
+  }
+  if(Net.probePromise&&!force) return Net.probePromise;
+  Net.probePromise=Net.client.ping().then(
+    (ok)=>{
+      Net.ready=!!ok; Net.lastError=ok?'':'后端不可达';
+      if(ok&&Net.client.isLoggedIn()){
+        Net.client.refreshMe().then(()=>{ netPaint(); netSyncOnlineUI(); }).catch(()=>{});
+        netWatch();
+      }
+      netPaint(); netSyncOnlineUI();
+      return Net.ready;
+    },
+    ()=>{ Net.ready=false; Net.lastError='后端不可达'; netPaint(); netSyncOnlineUI(); return false; }
+  );
+  return Net.probePromise;
+}
+/* 等探测结果，但最多等 ms 毫秒。有上限是必要的：后端地址填错时 TCP 连接会一直挂着，
+   不能让「每日挑战」这个按钮跟着卡住。 */
+async function netReady(ms){
+  if(!Net.client) return false;
+  if(Net.ready) return true;
+  await Promise.race([netProbe(true).catch(()=>false), sleep(ms==null?3000:ms)]);
+  return Net.ready;
+}
+function setApiBase(url){
+  url=String(url||'').trim().replace(/\/+$/,'');
+  netSaveApi(url);
+  if(Net.client){
+    const changed=url!==(Net.client.options.baseUrl||'');
+    Net.client.config({baseUrl:url});    // 换后端 = 旧令牌作废，库内部会 logout
+    if(changed){ netStopWatch(); Net.ready=false; Net.lastError=''; }
+  }
+  Net.snapshot=null;
+  netPaint(); netSyncOnlineUI();
+  return netProbe(true);
+}
+
+/* ---------------- 实时榜单 ---------------- */
+
+/* 换玩法就是换一张榜：服务端按玩法分频道推，订阅 URL 里带着 variant，
+   所以改玩法必须把旧连接停掉重建 —— 只改 Net.variant 是收不到东西的。
+   返回是否真的换了，调用方据此决定要不要重新订阅。 */
+function netSetVariant(v){
+  if(!v||v===Net.variant) return false;
+  Net.variant=v;
+  netStopWatch();
+  return true;
+}
+function netWatch(){
+  if(!Net.client||!Net.ready||Net.stopWs) return;
+  Net.client.config({variant:Net.variant});
+  Net.stopWs=Net.client.watchLeaderboard(
+    (snap)=>{ if(Net.scope!=='daily') return; Net.snapshot=snap; renderBoard(snap); },
+    (state)=>{ Net.wsState=state; if(state==='open') netPaint(); }
+  );
+}
+function netStopWatch(){
+  if(Net.stopWs){ try{ Net.stopWs(); }catch(_){} Net.stopWs=null; }
+  Net.wsState=null;
+}
+function renderBoard(payload){
+  const list=$('#lbList'); if(!list) return;
+  const entries=(payload&&payload.entries)||[];
+  const me=Net.client?Net.client.username():null;
+  list.innerHTML='';
+  if(!entries.length){
+    const li=document.createElement('li');
+    li.className='empty'; li.textContent='还没有人上榜，你可以是第一个';
+    list.appendChild(li);
+  }else{
+    entries.forEach((e)=>{
+      const li=document.createElement('li');
+      if(me&&e.username===me) li.className='me';
+      const rk=document.createElement('span'); rk.className='rk'; rk.textContent='#'+e.rank;
+      const nm=document.createElement('span'); nm.className='nm'; nm.textContent=e.username;
+      const tm=document.createElement('span'); tm.className='tm'; tm.textContent=e.elapsed_text;
+      li.append(rk,nm,tm);
+      list.appendChild(li);
+    });
+  }
+  $('#lbMeta').textContent=netMetaText(payload);
+}
+function netMetaText(payload){
+  if(!payload) return '尚未取到数据';
+  const parts=[
+    Net.variant==='mosaik'?'马赛克':'经典',
+    payload.scope==='all'?'历史总榜':((payload.date||'今日')+' 当日榜'),
+    '共 '+(payload.total||0)+' 人上榜',
+    payload.backend==='redis'?'存储 Redis':'存储 内存',
+  ];
+  if(Net.wsState==='open') parts.push('实时同步中');
+  return parts.join(' · ');
+}
+function boardEmpty(text){
+  const list=$('#lbList'); if(!list) return;
+  list.innerHTML='';
+  const li=document.createElement('li'); li.className='empty'; li.textContent=text;
+  list.appendChild(li); $('#lbMeta').textContent='—';
+}
+function netLoadBoard(scope){
+  if(!Net.client) return;
+  if(scope) Net.scope=scope;
+  $('#tabDaily').classList.toggle('on',Net.scope==='daily');
+  $('#tabAll').classList.toggle('on',Net.scope==='all');
+  $('#tabClassic').classList.toggle('on',Net.variant==='classic');
+  $('#tabMosaik').classList.toggle('on',Net.variant==='mosaik');
+  $('#boardSub').textContent=Net.scope==='all'
+    ?'所有人所有日期的个人最好成绩':'按用时排名，快者在前（同分并列）';
+  $('#lbList').innerHTML='<li class="empty">正在拉取…</li>';
+  Net.client.leaderboard({scope:Net.scope, variant:Net.variant, limit:20}).then(
+    (r)=>{ Net.snapshot=r; renderBoard(r); },
+    (err)=>{ boardEmpty('取榜单失败：'+netErrText(err)); }
+  );
+}
+async function openBoard(){
+  $('#modalBoard').classList.add('show');
+  // 榜单是两个玩法各排各的，打开时先跟到当前这局上，省得用户自己切
+  const want=S.onlineVariant||(S.sol.length?(S.mosaik?'mosaik':'classic'):null);
+  if(want) netSetVariant(want);
+  if(!Net.client){ boardEmpty('联机库没有加载'); return; }
+  if(await netReady(2500)){ netWatch(); netLoadBoard(Net.scope); }
+  else boardEmpty('连不上 '+(Net.client.options.baseUrl||'同源地址')+'。点「联机」改地址后重试。');
+}
+
+/* ---------------- 账号 ---------------- */
+
+function netAuth(mode){
+  if(!Net.client){ netMsg('联机库没有加载','bad'); return; }
+  const u=$('#inUser').value.trim(), p=$('#inPass').value;
+  const api=$('#inApi').value.trim().replace(/\/+$/,'');
+  if(u.length<3||u.length>24){ netMsg('用户名需 3~24 位','bad'); return; }
+  if(p.length<6){ netMsg('密码至少 6 位','bad'); return; }
+  netMsg(mode==='register'?'注册中…':'登录中…');
+  const baseChanged=api!==(Net.client.options.baseUrl||'');
+  const chain=baseChanged?setApiBase(api):netReady(3000);
+  chain.then((ok)=>{
+    if(!ok) throw Object.assign(new Error('连不上 '+(api||'同源地址')),{status:0});
+    return mode==='register'?Net.client.register(u,p):Net.client.login(u,p);
+  }).then((user)=>{
+    Net.ready=true; Net.lastError='';
+    $('#inPass').value='';
+    netMsg('已登录 '+user.username+'，从现在起成绩计入榜单','ok');
+    netPaint(); netSyncOnlineUI(); netWatch();
+  }).catch((err)=>{
+    Net.lastError=err&&err.message;
+    netMsg(netErrText(err),'bad');
+    netPaint(); netSyncOnlineUI();
+  });
+}
+function netLogout(){
+  if(!Net.client) return;
+  Net.client.logout(); netStopWatch();
+  netMsg('已退出登录，成绩不再上榜','');
+  netPaint(); netSyncOnlineUI();
+}
+function netRecheckToken(){
+  if(!Net.client||!Net.client.isLoggedIn()){ netMsg('当前没有登录',''); return; }
+  netMsg('正在校验…');
+  Net.client.refreshMe().then(
+    (user)=>{ netMsg('令牌有效，账号 '+user.username,'ok'); netPaint(); netSyncOnlineUI(); },
+    (err)=>{ netMsg(netErrText(err),'bad'); netPaint(); netSyncOnlineUI(); }
+  );
+}
+
+/* ---------------- 在线每日挑战 ---------------- */
+
+/* 服务端下发的题面 → 本地能直接渲染的一局。
+   线索原样用来渲染；答案不在题面里，用引擎就地解一份（题池里的题都保证
+   「传播器能推完」，所以这份解是完整且逐格正确的）；万一解不出就返回 null，
+   调用方会退回本地按日期定种子，棋盘不会卡住。 */
+function puzzleFromPayload(payload){
+  if(!payload) return null;
+  const mode=payload.mode==='mosaik'?'mosaik':'classic';
+  const w=Number(payload.w), h=Number(payload.h);
+  if(!(w>=3&&w<=30&&h>=3&&h<=30)) return null;
+  let sol=null, rowClues=null, colClues=null, clues=null;
+  const t0=Date.now();
+  try{
+    if(mode==='mosaik'){
+      clues=payload.clues;
+      if(!Array.isArray(clues)||clues.length!==h) return null;
+      const r=NG.mosaikSolve(clues);
+      if(r&&r.solved) sol=r.grid.flat().map(v=>v===1?1:0);
+    }else{
+      rowClues=payload.rowClues; colClues=payload.colClues;
+      if(!Array.isArray(rowClues)||rowClues.length!==h) return null;
+      if(!Array.isArray(colClues)||colClues.length!==w) return null;
+      const r=NG.solveClassic(rowClues,colClues);
+      if(r&&r.solved) sol=r.grid.flat().map(v=>v===1?1:0);
+    }
+  }catch(_){ sol=null; }
+  Net.solveMs=Date.now()-t0;
+  if(!sol||sol.length!==w*h) return null;
+  return {mode,w,h,rowClues,colClues,clues,sol};
+}
+/** 领今天的题。任何一步不顺都返回 null，由调用方落回本地。 */
+async function netFetchDaily(mode){
+  if(!Net.client) return null;
+  if(!(await netReady(1500))) return null;
+  try{
+    const r=await Net.client.fetchDaily({variant:mode});
+    const p=puzzleFromPayload(r.puzzle);
+    if(!p){ Net.lastError='服务端题目本地解不开'; return null; }
+    return {mode:p.mode,w:p.w,h:p.h,rowClues:p.rowClues,colClues:p.colClues,clues:p.clues,sol:p.sol,
+      puzzleId:r.puzzle_id, variant:r.variant, timed:!!r.timed};
+  }catch(err){
+    Net.lastError=netErrText(err);
+    return null;
+  }
+}
+/* 交卷。交的是「哪些格子被填了」，服务端按行字符串比对；耗时由服务端算。
+   探测可能还没回来，所以这里等一小会儿 —— 成绩上不上榜不该由"谁先跑完"决定。 */
+async function netSubmitDaily(){
+  if(!S.onlineId) return null;
+  if(!Net.client) return {note:'联机库没有加载 · 本局不计入榜单'};
+  if(!(await netReady(2000))) return {note:'后端不可达 · 本局不计入榜单'};
+  if(!Net.client.isLoggedIn()) return {note:'未登录 · 登录后成绩才能上榜'};
+  const rows=[];
+  for(let r=0;r<S.h;r++){
+    let s='';
+    for(let c=0;c<S.w;c++) s+=(S.grid[r*S.w+c]===1?'#':'.');
+    rows.push(s);
+  }
+  const r=await Net.client.submit(S.onlineId,{rows});
+  Net.lastSubmit=r;
+  return r;
+}
+function netWinPendingText(){
+  if(!Net.client) return '联机库没有加载 · 本局不计入榜单';
+  if(!Net.client.isLoggedIn()) return '未登录 · 登录后成绩才能上榜';
+  return '正在提交成绩…';
+}
+function netWinResultText(r){
+  if(!r) return '本局不计入榜单';
+  if(r.note) return r.note;
+  if(!r.correct) return '服务端判定不通过：'+(r.message||'答案不对');
+  if(r.ranked){
+    const extra=r.improved?'（个人最好）':'';
+    return `第 ${r.rank} 名 / 共 ${r.total} 人 · 服务端计时 ${fmtElapsedMs(r.elapsed_ms)}${extra}`;
+  }
+  return r.message||'答对了，但本局未计入榜单';
+}
+/** 通关后把成绩交给服务端；离线局（没有 onlineId）整块跳过，界面完全不变。 */
+function netAfterWin(){
+  const box=$('#winOnline');
+  if(!box) return;
+  if(!S.onlineId){ box.hidden=true; box.textContent=''; return; }
+  box.hidden=false; box.className='win-online'; box.textContent=netWinPendingText();
+  netSubmitDaily().then((r)=>{
+    if(!r){ box.hidden=true; return; }
+    box.textContent=netWinResultText(r);
+    box.className='win-online'+((r.note||!r.correct)?' bad':'');
+    // 上榜了就把订阅切到这张榜上，否则推送推的是另一个玩法的频道
+    if(r.ranked&&netSetVariant(S.onlineVariant)) netWatch();
+  }).catch(()=>{
+    box.textContent='提交失败 · 本局不计入榜单';
+    box.className='win-online bad';
+  });
+}
+function netInit(){
+  if(typeof window.PuzzleClient!=='function'){ netPaint(); netSyncOnlineUI(); return; }
+  Net.client=window.PuzzleClient({
+    baseUrl:readApiBase(),
+    game:'shuzhi',
+    variant:Net.variant,
+    storageKey:'nonogram.auth',
+  });
+  Net.client.on('state',()=>{ netPaint(); netSyncOnlineUI(); });
+  $('#inApi').value=Net.client.options.baseUrl||'';
+  netPaint(); netSyncOnlineUI();
+  netProbe();
+}
+
 /* ================= 控件绑定 ================= */
 $('#modeSeg').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -727,6 +1211,21 @@ $('#btnMark').addEventListener('click',()=>{
   markMode=!markMode; $('#markLbl').textContent=markMode?'填充模式':'标记模式';
   $('#btnMark').classList.toggle('primary',markMode); sfx('ui');
 });
+$('#btnOnline').addEventListener('click',()=>{ sfx('ui'); netSyncOnlineUI(); $('#modalOnline').classList.add('show'); });
+$('#btnBoard').addEventListener('click',()=>{ sfx('ui'); openBoard(); });
+$('#btnLogin').addEventListener('click',()=>netAuth('login'));
+$('#btnRegister').addEventListener('click',()=>netAuth('register'));
+$('#btnLogout').addEventListener('click',netLogout);
+$('#btnCheckToken').addEventListener('click',netRecheckToken);
+$('#btnCloseOnline').addEventListener('click',()=>$('#modalOnline').classList.remove('show'));
+$('#btnCloseBoard').addEventListener('click',()=>$('#modalBoard').classList.remove('show'));
+// 地址在失焦时才提交，避免敲到一半就去连一个半截地址
+$('#inApi').addEventListener('change',()=>{ setApiBase($('#inApi').value); });
+$('#inPass').addEventListener('keydown',e=>{ if(e.key==='Enter') netAuth('login'); });
+$('#tabDaily').addEventListener('click',()=>netLoadBoard('daily'));
+$('#tabAll').addEventListener('click',()=>netLoadBoard('all'));
+$('#tabClassic').addEventListener('click',()=>{ if(netSetVariant('classic')){ netWatch(); netLoadBoard(); } });
+$('#tabMosaik').addEventListener('click',()=>{ if(netSetVariant('mosaik')){ netWatch(); netLoadBoard(); } });
 $('#btnGallery').addEventListener('click',()=>{ renderGallery(); $('#modalGallery').classList.add('show'); sfx('ui'); });
 $('#btnGalClose').addEventListener('click',()=>$('#modalGallery').classList.remove('show'));
 $('#btnHelp').addEventListener('click',()=>$('#modalHelp').classList.add('show'));
@@ -744,6 +1243,7 @@ addEventListener('resize',()=>{ if(S.sol.length) buildBoard(); });
 window.__nong={
   state:()=>({mode:S.mode,w:S.w,h:S.h,done:S.done,strikes:S.strikes,hints:S.hints,elapsed:S.elapsed,key:S.key,
     daily:S.daily, dk:S.dk, mosaik:S.mosaik, name:S.name,
+    onlineId:S.onlineId, onlineVariant:S.onlineVariant,
     onBtn:document.querySelector('#modeSeg button.on')?.dataset.mode,
     puzzleName:$('#puzzleName').textContent,
     mismatch:S.grid.reduce((a,v,i)=>a+((S.sol[i]===1)!==(v===1)?1:0),0)}),
@@ -751,17 +1251,37 @@ window.__nong={
   solArr:()=>S.sol.slice(),
   gridArr:()=>S.grid.slice(),
   clues:()=>S.mosaik?S.clues.map(r=>r.slice()):null,
+  rowClues:()=>S.mosaik?null:S.rowClues.map(r=>r.slice()),
+  colClues:()=>S.mosaik?null:S.colClues.map(r=>r.slice()),
   fillAllCorrect(){ for(let i=0;i<S.sol.length;i++) S.grid[i]=S.sol[i]; applyAllCells(); checkWin(); },
   fillCell:(r,c,v)=>{ const i=r*S.w+c; S.grid[i]=v; applyCellEl(i); checkWin(); },
   cur:(r,c)=>S.grid[r*S.w+c],
   sol:(r,c)=>S.sol[r*S.w+c],
   gen:(mode,w,h)=>genRandom(mode,w,h),
   startDaily, newRandomPuzzle, hint, demo, deducePick:()=>{const {flat,res}=deduce();return {flat,res};},
-  dailyKey, version:'1.1',
+  dailyKey, version:'1.2',
+  // 联机（供测试驱动；也方便在控制台里手动排查）
+  net:{
+    probe:(force)=>netProbe(force!==false),
+    state:()=>({ready:Net.ready,
+      loggedIn:!!(Net.client&&Net.client.isLoggedIn()),
+      username:Net.client?Net.client.username():null,
+      scope:Net.scope, variant:Net.variant, lastError:Net.lastError,
+      solveMs:Net.solveMs, wsState:Net.wsState, hasClient:!!Net.client}),
+    setApi:(u)=>setApiBase(u),
+    openOnline:()=>{ netSyncOnlineUI(); $('#modalOnline').classList.add('show'); },
+    openBoard:()=>openBoard(),
+    login:(u,p)=>Net.client.login(u,p),
+    register:(u,p)=>Net.client.register(u,p),
+    logout:()=>netLogout(),
+    lastSubmit:()=>Net.lastSubmit,
+    winText:()=>$('#winOnline').textContent,
+  },
 };
 
 /* ================= 启动 ================= */
 try{ if(!localStorage.getItem('nonogram.help')) $('#modalHelp').classList.add('show'); }catch(_){}
+netInit();
 newRandomPuzzle();
 </script>
 </body>
