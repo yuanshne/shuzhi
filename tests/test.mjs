@@ -1,20 +1,20 @@
 import { chromium } from 'playwright-core';
+import { resolveChrome } from './chrome.mjs';
 
-const CHROME = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
-const URL = 'file:///C:/Users/A/Desktop/tst3/nonogram.html';
+const PAGE_URL = new URL('../index.html', import.meta.url).href;
 const results = [];
 const check = (name, ok, extra = '') => {
   results.push({ name, ok });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${extra ? '  -- ' + extra : ''}`);
 };
 
-const browser = await chromium.launch({ executablePath: CHROME, headless: true });
+const browser = await chromium.launch({ headless: true, ...resolveChrome() });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 const errors = [];
 page.on('pageerror', e => errors.push('pageerror: ' + e.message));
 page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 
-await page.goto(URL);
+await page.goto(PAGE_URL);
 await page.waitForSelector('.cell', { timeout: 8000 });
 await page.waitForTimeout(400);
 if (await page.isVisible('#modalHelp.show')) await page.click('#btnHelpOk');
