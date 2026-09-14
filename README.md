@@ -74,7 +74,7 @@
 
 这是防作弊的意义所在 —— 答案不能发下去。做法是**用引擎就地解一份**：
 本地求解器跑一道唯一解的 10×10 盘面通常 1ms 以内。
-写了个探针（`puzzle-server/var/probe_shuzhi_solve.mjs`）把题池里 **180 道数织题逐一对照：
+写了个探针把题池里 **180 道数织题逐一对照：
 本地解与标准答案逐格全等，单题最慢 1.01ms，平均 0.08ms**。
 这份解只用于即时反馈和「提示」，判定始终在服务端。
 
@@ -101,7 +101,7 @@ build.py                构建：内联 src/*.js 进 template.html
 src/engine.js           引擎：线索、约束传播、回溯解计数、马赛克邻域夹逼（Node 与浏览器双端可用）
 src/art.js              16 幅手绘像素画素材
 src/template.html       骨架、样式与全部界面逻辑（含联机层）
-src/puzzle-client.js    联机客户端库（从 puzzle-server 同步过来的逐字节副本，见下）
+src/puzzle-client.js    联机客户端库（从本仓库 server/ 同步过来的逐字节副本，见下）
 src/engine.test.mjs     引擎测试：含与暴力枚举的交叉验证
 src/art.test.mjs        素材校验
 tests/test.mjs          离线 UI 测试（Playwright 驱动 Chromium）：30 项
@@ -131,8 +131,8 @@ node art.test.mjs     # 素材校验
 ## 更新记录
 
 - 新增 **联机模式**：账号 / 服务端出题 / 服务端计时 / 双玩法实时排行榜（WebSocket 推送）。
-  离线玩法一行未改，联机层任何一步失败都只让榜单消失。对接的是 `puzzle-server`
-  （FastAPI + Redis 降级内存），四款游戏共用同一个后端与同一个客户端库。
+  离线玩法一行未改，联机层任何一步失败都只让榜单消失。对接的是内置后端
+  （FastAPI + Redis 降级内存，位于本仓库 `server/` 目录）。
 - 修复 **调试 API 一次填满时耗时会变成天文数字**：计时是从「第一次动手」才启动的
   （`startTimer` 在交互里调），整局没动手就没有起点，旧实现直接拿 `Date.now()` 减掉初始的 0，
   记出来的最佳成绩是 `29822730:47`。改为没有起点时记 0。
@@ -161,7 +161,7 @@ node art.test.mjs     # 素材校验
 | [立方数独 3D](https://github.com/yuanshne/shudu3d) | `shudu3d` | 魔方数独：转层分开重复数字，每面补成 1~N² 即胜 |
 | [长夜灯](https://github.com/yuanshne/changyedeng) | `changyedeng` | 锈湖式文字解谜：荒山客栈里一盏吃名字的灯 |
 
-这四款共用同一个联机后端与同一个客户端库：[`puzzle-server`](https://github.com/yuanshne/puzzle-server)。
+数绘、数织、数独 3D 的联机后端各自内置在本仓库的 `server/` 目录里；长夜灯是纯单机叙事游戏，没有后端。
 
 ## 许可
 
