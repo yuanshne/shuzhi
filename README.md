@@ -1,5 +1,7 @@
 # 数织·奇想 · Nonogram Fantasy
 
+![CI](https://github.com/yuanshne/shuzhi/actions/workflows/ci.yml/badge.svg)
+
 原神风格 UI 的轻量数织（Nonogram）网页游戏。**单文件、零依赖、离线可玩**——下载 `index.html` 双击即玩。
 
 ![数织·奇想](tests/shots/hero.png)
@@ -152,4 +154,15 @@ node art.test.mjs     # 素材校验
 
 ## 姊妹项目
 
-[立方数独 Cube Sudoku 3D](https://github.com/yuanshne/shudu3d)——魔方数独，同一风格与工程范式。
+| 游戏 | 仓库 | 说明 |
+|------|------|------|
+| [数回 Slitherlink](https://github.com/yuanshne/shuhui) | `shuhui` | 一笔画闭环填边，唯一解保证 |
+| 数织·奇想 | `shuzhi`（本仓库） | 经典/马赛克双玩法、每日挑战、16 幅像素画画廊、唯一解保证 |
+| [立方数独 3D](https://github.com/yuanshne/shudu3d) | `shudu3d` | 魔方数独：转层分开重复数字，每面补成 1~N² 即胜 |
+| [长夜灯](https://github.com/yuanshne/changyedeng) | `changyedeng` | 锈湖式文字解谜：荒山客栈里一盏吃名字的灯 |
+
+这四款共用同一个联机后端与同一个客户端库：[`puzzle-server`](https://github.com/yuanshne/puzzle-server)。
+
+## 许可
+
+MIT，见 [LICENSE](LICENSE)。
