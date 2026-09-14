@@ -166,6 +166,118 @@ const snd = await page.evaluate(() => document.querySelector('#btnSound').textCo
 await page.click('#btnSound');
 check('音效开关正常', snd === '🔇');
 
+/* ---------- 10. 马赛克棋盘几何（回归：曾整盘塌成一条 2px 横线） ---------- */
+await page.click('#modeSeg button[data-mode="mosaik"]');
+await page.waitForTimeout(500);
+const mg = await page.evaluate(() => {
+  const b = document.querySelector('#board').getBoundingClientRect();
+  const c = document.querySelector('#board .cell').getBoundingClientRect();
+  const cs = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--cs'));
+  const st = __nong.state();
+  return { cellW: +c.width.toFixed(1), cellH: +c.height.toFixed(1), cs, boardH: +b.height.toFixed(1),
+           w: st.w, h: st.h, mosaikClass: document.querySelector('#board').classList.contains('mosaik') };
+});
+check('马赛克棋盘：格子为正方形且边长 = --cs', Math.abs(mg.cellW - mg.cellH) <= 1 && Math.abs(mg.cellW - mg.cs) <= 1,
+  `${mg.cellW}×${mg.cellH} (--cs=${mg.cs})`);
+check('马赛克棋盘：高度 ≈ 行数×格子边长（不再塌陷）', Math.abs(mg.boardH - mg.h * mg.cs) <= mg.h + 2,
+  `board ${mg.boardH} vs ${(mg.h * mg.cs).toFixed(0)}`);
+check('马赛克棋盘带 mosaik 类（角标样式依赖它）', mg.mosaikClass);
+
+/* ---------- 11. 马赛克：标记符不覆盖格内数字 ---------- */
+const mkIdx = await page.evaluate(() => __nong.solArr().findIndex((v) => v === 0));
+await page.click(`.cell[data-i="${mkIdx}"]`, { button: 'right' });
+await page.waitForTimeout(220);
+const mk = await page.evaluate((i) => {
+  const el = document.querySelector(`.cell[data-i="${i}"]`);
+  const ca = getComputedStyle(el, '::after');
+  return { display: ca.display, fontSize: parseFloat(ca.fontSize), cell: el.getBoundingClientRect().width };
+}, mkIdx);
+check('马赛克标记 ✕ 改为右上角小角标（数字仍可读）', mk.display === 'block' && mk.fontSize < mk.cell * 0.45, JSON.stringify(mk));
+await page.click(`.cell[data-i="${mkIdx}"]`, { button: 'right' });
+await page.waitForTimeout(150);
+
+/* ---------- 12. 马赛克：提示落在「可推理」的格子 ---------- */
+const hRes = await page.evaluate(() => {
+  let visible = 0, wrong = 0;
+  for (let t = 0; t < 6; t++) {
+    const before = __nong.gridArr();
+    __nong.hint();
+    const after = __nong.gridArr(), sol = __nong.solArr();
+    const changed = after.map((v, i) => (v !== before[i] ? i : -1)).filter((i) => i >= 0);
+    if (changed.length === 1) visible++;
+    for (const i of changed) if ((sol[i] === 1) !== (after[i] === 1)) wrong++;
+  }
+  return { visible, wrong };
+});
+check('马赛克：每次提示都有可见变化且与解一致', hRes.visible === 6 && hRes.wrong === 0, JSON.stringify(hRes));
+
+/* ---------- 13. 马赛克：演示用推理推进到胜利 ---------- */
+await page.click('#modeSeg button[data-mode="mosaik"]');
+await page.waitForTimeout(400);
+await page.evaluate(async () => { await __nong.demo(); });
+await page.waitForTimeout(300);
+const dRes = await page.evaluate(() => ({ done: __nong.state().done, mismatch: __nong.state().mismatch }));
+check('马赛克演示：走完 → 胜利且零错格', dRes.done && dRes.mismatch === 0, JSON.stringify(dRes));
+await page.evaluate(() => document.querySelector('#modalWin').classList.remove('show'));
+
+/* ---------- 14. 每日挑战：日期种子 / 按钮高亮 / 通关记录 ---------- */
+await page.reload();
+await page.waitForSelector('.cell');
+await page.waitForTimeout(300);
+if (await page.isVisible('#modalHelp.show')) await page.click('#btnHelpOk');
+const dailyAt = async (iso) => {
+  await page.evaluate((s) => {
+    const R = Date, fixed = new R(s + 'T12:00:00').getTime();
+    window.Date = class extends R {
+      constructor(...a) { a.length === 0 ? super(fixed) : super(...a); }
+      static now() { return fixed; }
+    };
+  }, iso);
+  await page.click('#modeSeg button[data-mode="daily"]');
+  await page.waitForTimeout(650);
+  return page.evaluate(() => ({ sol: __nong.solArr().join(''), st: __nong.state() }));
+};
+const d14 = await dailyAt('2026-09-14');
+const d15 = await dailyAt('2026-09-15');
+const d16 = await dailyAt('2026-09-16');
+const d17 = await dailyAt('2026-09-17');
+check('每日挑战：连续 4 天出 4 道不同的题（回归：曾经隔天就重复）',
+  new Set([d14.sol, d15.sol, d16.sol, d17.sol]).size === 4);
+check('每日挑战：同一天重复进入题目一致（全服同题）', (await dailyAt('2026-09-16')).sol === d16.sol);
+check('每日挑战：模式按钮保持在「每日」高亮', d16.st.onBtn === 'daily' && d16.st.daily === true,
+  JSON.stringify({ onBtn: d16.st.onBtn, mode: d16.st.mode }));
+check('每日挑战：题名含日期', /^\d{4}\.\d{2}\.\d{2}$/.test(d16.st.name), d16.st.name);
+
+await page.evaluate(() => __nong.fillAllCorrect());
+await page.waitForTimeout(900);
+const dw = await page.evaluate(() => ({
+  name: document.querySelector('#puzzleName').textContent,
+  rec: JSON.parse(localStorage.getItem('nonogram.v1') || '{}').daily,
+  dk: __nong.state().dk,
+}));
+check('每日通关：标题出现 ✓', dw.name.includes('✓'), dw.name);
+check('每日通关：写入当天的 done/best/plays 记录',
+  !!dw.rec[dw.dk] && dw.rec[dw.dk].done === true && dw.rec[dw.dk].plays >= 1, JSON.stringify(dw.rec));
+await page.evaluate(() => document.querySelector('#modalWin').classList.remove('show'));
+await page.reload();
+await page.waitForSelector('.cell');
+await page.waitForTimeout(300);
+if (await page.isVisible('#modalHelp.show')) await page.click('#btnHelpOk');
+await page.evaluate(() => {
+  const R = Date, fixed = new R('2026-09-16T12:00:00').getTime();
+  window.Date = class extends R {
+    constructor(...a) { a.length === 0 ? super(fixed) : super(...a); }
+    static now() { return fixed; }
+  };
+});
+await page.click('#modeSeg button[data-mode="daily"]');
+await page.waitForTimeout(700);
+const re = await page.evaluate(() => ({
+  name: document.querySelector('#puzzleName').textContent,
+  toast: document.querySelector('#toast').textContent,
+}));
+check('每日通关：刷新后再进能看到已完成状态', re.name.includes('✓') && /今日已完成/.test(re.toast), JSON.stringify(re));
+
 console.log('\n== console/page errors ==');
 console.log(errors.length ? errors.join('\n') : '(none)');
 const fails = results.filter(r => !r.ok);

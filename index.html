@@ -86,7 +86,8 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
 .rc{display:flex; align-items:center; justify-content:flex-end; padding:2px 6px; gap:7px;
   font-family:var(--num); font-weight:700; color:var(--tx2); font-size:var(--cfs,13px);}
 .rc.hl{color:var(--gold2);}
-.cell{border:1px solid rgba(211,188,142,.14); background:rgba(148,163,184,.06); cursor:pointer; transition:background .1s; position:relative;}
+.cell{border:1px solid rgba(211,188,142,.14); background:rgba(148,163,184,.06); cursor:pointer; transition:background .1s; position:relative;
+  width:var(--cs,36px); height:var(--cs,36px);}
 .cell:hover{outline:1.5px solid rgba(240,226,192,.5); outline-offset:-1.5px; z-index:2;}
 .cell.f{background:var(--gold); border-color:rgba(0,0,0,.25); box-shadow:inset 0 0 6px rgba(0,0,0,.25);}
 .cell.x{background:rgba(148,163,184,.03);}
@@ -98,6 +99,10 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
   color:rgba(240,226,192,.42); pointer-events:none; z-index:1;}
 .cell.f .md{color:rgba(42,32,16,.78);}
 .cell.x .md{color:rgba(229,138,118,.35);}
+/* 马赛克每格都带数字，整格 ✕ 会被数字压住糊成一团——改成右上角小角标，保证数字可读 */
+#board.mosaik .cell.x{background:rgba(229,138,118,.10);}
+#board.mosaik .cell.x::after{content:'✕'; inset:auto; top:1px; right:2px; display:block;
+  font-size:calc(var(--cs,36px)*.32); line-height:1; color:rgba(229,138,118,.9);}
 @keyframes errFlash{0%,100%{background:rgba(229,138,118,.15);}40%{background:rgba(229,138,118,.75);}}
 .cell.hl-row,.cell.hl-col{background:rgba(211,188,142,.12);}
 .cell.f.hl-row,.cell.f.hl-col{background:var(--gold);}
@@ -225,8 +230,8 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
     <h2>玩法说明<span class="en" style="font-family:var(--serif); font-size:11px; color:var(--gold); letter-spacing:3px; margin-left:8px;">HOW TO PLAY</span></h2>
     <ul class="rule-list">
       <li><b>经典模式：</b>行/列旁的数字表示该行/列中<b>连续填充段</b>的长度（如 <b>2 1</b> = 先 2 连填、至少 1 空、再 1 填）。填满所有正确格子即完成。</li>
-      <li><b>马赛克模式：</b>每格的数字表示以它为中心的 <b>3×3 邻域</b>（含自身）里的填充总数——推理方式完全不同，胆大心细。</li>
-      <li><b>每日挑战：</b>每天一道全服相同的谜题（按日期定种子），记录你的最佳时间。</li>
+      <li><b>马赛克模式：</b>每格的数字表示以它为中心的 <b>3×3 邻域</b>（含自身）里的填充总数——推理方式完全不同，胆大心细。贴着棋盘边界的格子，只统计落在盘内的部分。</li>
+      <li><b>每日挑战：</b>每天一道全服相同的谜题（经典/马赛克隔日轮换，按日期定种子），记录当日最佳时间与完成状态。</li>
       <li>左键/点按 = 填充；右键或<b>标记模式</b> = 打 ✕ 排除；填充到错误格子会计一次失误并自动改为 ✕。</li>
       <li><b>提示</b>揭示一个可推理的格子；<b>演示</b>用求解器逐步展示推理；<b>画廊</b>里收录 16 幅像素画，解出一幅就永久点亮它的彩色原画。</li>
     </ul>
@@ -284,9 +289,29 @@ header{position:fixed; top:0; left:0; right:0; z-index:20; display:flex; align-i
 
 /* ==================== 确定性随机 ==================== */
 
-// mulberry32 PRNG：mulberry32(seed) 返回 () => [0,1) 的确定性随机函数
+/*
+ * FNV-1a 32 位字符串散列。
+ *
+ * 存在的理由：把非数字种子里直接喂给 mulberry32 会踩一个静默的坑——
+ * `'d20260914' >>> 0` 先 ToNumber 得到 NaN、再 ToUint32 得到 0，
+ * 于是「按日期定种子」的每一颗种子都塌成同一个 0，每日挑战永远出同一道题。
+ * 任何字符串种子都应该先过一遍这里。
+ */
+function hashSeed(str) {
+  const s = String(str);
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  // 散列撞到 0 时换一个非零常量，避免与「缺省种子」撞车
+  return h === 0 ? 0x9e3779b9 : h;
+}
+
+// mulberry32 PRNG：mulberry32(seed) 返回 () => [0,1) 的确定性随机函数。
+// seed 为数字时按 uint32 解释；为字符串时先经 hashSeed 散列。
 function mulberry32(seed) {
-  let a = seed >>> 0;
+  let a = typeof seed === 'string' ? hashSeed(seed) : seed >>> 0;
   return function () {
     a = (a + 0x6D2B79F5) | 0;
     let t = a;
@@ -815,10 +840,92 @@ function mosaikGenerate(w, h, rng, maxAttempts) {
   return { solution: null, clues: null, unique: false };
 }
 
+/* ==================== 马赛克：约束传播 ==================== */
+
+/*
+ * 马赛克约束传播（原地修改 grid）。
+ *
+ * 每个线索格 (x,y) 给出的数字，是它 3×3 邻域（越界裁剪）内填充格的总数。
+ * 设该邻域内「已确定填充」数为 filled、「未确定」数为 unknown，则必须有
+ *      filled ≤ clue ≤ filled + unknown
+ * 两端取等时即可定死整片邻域：
+ *   clue === filled            → 邻域内所有未定格必为空（置 0）
+ *   clue === filled + unknown  → 邻域内所有未定格必为填充（置 1）
+ * 新定的格子会改变相邻线索格的 filled，故反复迭代到不动点。
+ *
+ * 返回 'solved'（无未知且无矛盾）| 'open'（仍有未知）| 'contradiction'
+ */
+function mosaikPropagate(clues, grid) {
+  const h = clues.length;
+  const w = h > 0 ? clues[0].length : 0;
+  if (h === 0 || w === 0) return 'solved';
+
+  const yLo = new Int32Array(h), yHi = new Int32Array(h);
+  for (let y = 0; y < h; y++) { yLo[y] = y > 0 ? y - 1 : 0; yHi[y] = y < h - 1 ? y + 1 : h - 1; }
+  const xLo = new Int32Array(w), xHi = new Int32Array(w);
+  for (let x = 0; x < w; x++) { xLo[x] = x > 0 ? x - 1 : 0; xHi[x] = x < w - 1 ? x + 1 : w - 1; }
+
+  for (;;) {
+    let changed = false;
+    for (let y = 0; y < h; y++) {
+      const y0 = yLo[y], y1 = yHi[y];
+      for (let x = 0; x < w; x++) {
+        const clue = clues[y][x];
+        const x0 = xLo[x], x1 = xHi[x];
+        let filled = 0, unknown = 0;
+        for (let yy = y0; yy <= y1; yy++) {
+          const row = grid[yy];
+          for (let xx = x0; xx <= x1; xx++) {
+            const v = row[xx];
+            if (v === 1) filled++;
+            else if (v === -1) unknown++;
+          }
+        }
+        if (filled > clue || filled + unknown < clue) return 'contradiction';
+        if (unknown === 0) continue;
+        let to;
+        if (filled === clue) to = 0;
+        else if (filled + unknown === clue) to = 1;
+        else continue;
+        for (let yy = y0; yy <= y1; yy++) {
+          const row = grid[yy];
+          for (let xx = x0; xx <= x1; xx++) if (row[xx] === -1) { row[xx] = to; changed = true; }
+        }
+      }
+    }
+    if (!changed) break;
+  }
+
+  for (let y = 0; y < h; y++) {
+    const row = grid[y];
+    for (let x = 0; x < w; x++) if (row[x] === -1) return 'open';
+  }
+  return 'solved';
+}
+
+// mosaikSolve(clues, grid?) → { solved, grid, contradiction }
+// 与 solveClassic 同形：复制一份再传播，不修改传入的 grid。
+function mosaikSolve(clues, grid) {
+  const h = clues.length;
+  const w = h > 0 ? clues[0].length : 0;
+  const g = new Array(h);
+  for (let y = 0; y < h; y++) {
+    if (grid) g[y] = grid[y].slice();
+    else {
+      const row = new Array(w);
+      for (let x = 0; x < w; x++) row[x] = -1;
+      g[y] = row;
+    }
+  }
+  const st = mosaikPropagate(clues, g);
+  return { solved: st === 'solved', grid: g, contradiction: st === 'contradiction' };
+}
+
 /* ==================== 导出 ==================== */
 
 const API = {
   mulberry32,
+  hashSeed,
   cluesFromSolution,
   solveLine,
   solveClassic,
@@ -827,6 +934,8 @@ const API = {
   mosaikCluesFromSolution,
   mosaikCountSolutions,
   mosaikGenerate,
+  mosaikPropagate,
+  mosaikSolve,
 };
 
 if (typeof module !== 'undefined' && module.exports) { module.exports = API; }
@@ -1215,11 +1324,11 @@ function saveNow(){
 
 /* ================= 状态 ================= */
 const S={
-  mode:'classic',            // classic | mosaik | daily
+  mode:'classic',            // classic | mosaik（每日挑战的底层模式；是否每日另看 daily）
   w:10, h:10,
   sol:[], grid:[],           // sol: 0/1 目标；grid: 0 空 1 填 2 标记
-  rowClues:[], colClues:[],
-  key:'', name:'', mosaik:false, daily:false, artOf:null,
+  rowClues:[], colClues:[], clues:[],
+  key:'', name:'', mosaik:false, daily:false, dk:null, artOf:null,
   strikes:0, hints:0, elapsed:0, t0:0, running:false, done:false,
   paintVal:1, painting:false, demoBusy:false,
 };
@@ -1253,28 +1362,39 @@ function genRandom(mode,w,h){
   }
   return null;
 }
+// 当前这局的日期键：每日挑战用「开局那天」而不是「此刻」，避免跨零点结算时记错到第二天
+function puzzleDailyKey(){ return S.dk||dailyKey(); }
+function puzzleTitle(){
+  const base=S.name||((S.mosaik?'马赛克 ':'经典 ')+S.w+'×'+S.h);
+  const rec=S.daily?SAVE.daily[puzzleDailyKey()]:null;
+  return (S.daily?'每日 · ':'')+base+(rec&&rec.done?' ✓':'');
+}
 function startPuzzle(cfg){
-  // cfg: {mode:'classic'|'mosaik', sol, rowClues, colClues, clues, w, h, name, key, daily, mosaik, art}
+  // cfg: {mode:'classic'|'mosaik', sol, rowClues, colClues, clues, w, h, name, key, daily, mosaik, art, dk}
+  const prevMode=S.mode;
   S.mode=cfg.mode; S.w=cfg.w; S.h=cfg.h;
   S.sol=cfg.sol.slice(); S.mosaik=!!cfg.mosaik; S.daily=!!cfg.daily;
-  S.key=cfg.key||''; S.name=cfg.name||''; S.artOf=cfg.art||null;
-  if(S.mosaik){ S.clues=cfg.clues; }
-  else { S.rowClues=cfg.rowClues; S.colClues=cfg.colClues; }
+  S.key=cfg.key||''; S.name=cfg.name||''; S.artOf=cfg.art||null; S.dk=cfg.dk||null;
+  // 两种模式的线索结构不同，必须各自显式重置，否则切换模式时会留着上一局的残留线索
+  if(S.mosaik){ S.clues=cfg.clues; S.rowClues=[]; S.colClues=[]; }
+  else { S.rowClues=cfg.rowClues; S.colClues=cfg.colClues; S.clues=[]; }
   S.grid=new Array(S.w*S.h).fill(0);
   S.strikes=0; S.hints=0; S.elapsed=0; S.running=false; S.done=false; S._toldPairs=false;
-  $('#puzzleName').textContent=(S.daily?'每日 · ':'')+(S.name||((S.mosaik?'马赛克 ':'经典 ')+S.w+'×'+S.h));
-  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===S.mode));
+  $('#puzzleName').textContent=puzzleTitle();
+  // 每日挑战的底层是经典/马赛克，但「每日」这一档必须保持高亮，否则点完就看不到自己在哪一档
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('on',b.dataset.mode===(S.daily?'daily':S.mode)));
   buildBoard(); hudRefresh();
+  if(prevMode!==S.mode||S.daily) stopDemo();
   saveNow();
 }
 function newRandomPuzzle(){
   stopDemo();
-  const sizes=S.mode==='mosaik'?[6,8,10]:[5,10,15];
+  const mode=S.mode==='mosaik'?'mosaik':'classic';
+  const sizes=mode==='mosaik'?[6,8,10]:[5,10,15];
   const wh=sizes[Math.floor(Math.random()*sizes.length)];
-  const w=wh, h=wh;
-  const g=genRandom(S.mode==='daily'?'classic':S.mode, w, h);
+  const g=genRandom(mode, wh, wh);
   if(!g){ toast('生成失败，再试一次'); return; }
-  startPuzzle({mode:S.mode==='daily'?'classic':S.mode, sol:g.sol, clues:g.clues, rowClues:g.rowClues, colClues:g.colClues, w, h,
+  startPuzzle({mode, sol:g.sol, clues:g.clues, rowClues:g.rowClues, colClues:g.colClues, w:wh, h:wh,
     name:null, key:'rnd-'+Date.now(), mosaik:g.mosaik});
 }
 
@@ -1283,6 +1403,7 @@ const boardEl=$('#board');
 function buildBoard(){
   boardEl.innerHTML='';
   const N=S.w, cell=computeCellSize();
+  boardEl.classList.toggle('mosaik',!!S.mosaik);
   document.documentElement.style.setProperty('--cs',cell+'px');
   document.documentElement.style.setProperty('--cfs',Math.max(9,Math.round(cell*.36))+'px');
   let html='';
@@ -1317,11 +1438,13 @@ function clueLen(){
   return Math.max(1,...(S.rowClues||[]).map(c=>c.length||1));
 }
 function baseCellSize(){
-  const N=S.w;
-  const cw=S.mosaik?0:clueLen()*30+12;
+  // 线索列是固定宽度：格子最大 48 时 48*.42 仍小于 26，所以每列线索恒占 26px。
+  // 必须先把这段宽度从可用宽度里扣掉——旧实现按 clueLen*30+12 预留、却渲染成 clueLen*26+12，
+  // 且下限卡在 20px，导致窄屏上 15×15 会被线索列挤出屏幕右侧。
+  const cw=S.mosaik?0:clueLen()*26+12;
   const availW=Math.min(innerWidth-24, 1200)-cw;
   const availH=innerHeight-240;
-  return clamp(Math.floor(Math.min(availW/N, availH/S.h)), 20, 48);
+  return clamp(Math.floor(Math.min(availW/S.w, availH/S.h)), 12, 48);
 }
 function computeCellSize(){ return baseCellSize(); }
 function clueWidth(){
@@ -1406,7 +1529,12 @@ function checkWin(){
   drawArt($('#winCanvas'), S.sol, S.w, Math.min(240, S.w*18), S.artOf?ART.colorOf(S.artOf):'#e0c184');
   let isNew=false;
   if(S.key){ const b=SAVE.best[S.key]; if(b==null||S.elapsed<b){ SAVE.best[S.key]=S.elapsed; isNew=true; } }
-  if(S.daily){ SAVE.daily[dailyKey()]={done:true,best:Math.min(SAVE.best[S.key]||1e9,S.elapsed)}; }
+  // 记到「本局所属的那一天」的键上，跨零点结算也不会串到第二天
+  if(S.daily){
+    const dk=puzzleDailyKey(), rec=SAVE.daily[dk];
+    SAVE.daily[dk]={done:true,best:Math.min(rec?rec.best:SAVE.best[S.key],S.elapsed),plays:(rec?rec.plays||0:0)+1};
+    $('#puzzleName').textContent=puzzleTitle();
+  }
   if(S.artOf) SAVE.solved[S.artOf]=true;
   $('#winBest').hidden=!isNew;
   saveNow(); hudRefresh();
@@ -1414,27 +1542,39 @@ function checkWin(){
 }
 
 /* ================= 提示 / 演示 ================= */
+// 把当前填涂状态翻译成求解器输入：填充 → 1、标记 → 0（视为空）、未涂 → -1
+function solveInput(){
+  const flat=S.grid.map(v=>v===1?1:v===2?0:-1);
+  const grid=[]; for(let r=0;r<S.h;r++) grid.push(flat.slice(r*S.w,(r+1)*S.w));
+  return {flat,grid};
+}
+function deduce(){ const {flat,grid}=solveInput(); return {flat,ok:true,
+  res:S.mosaik?NG.mosaikSolve(S.clues,grid):NG.solveClassic(S.rowClues,S.colClues,grid)}; }
+
 function hint(){
   if(S.done||S.demoBusy) return;
   const unknown=[]; for(let i=0;i<S.sol.length;i++) if(S.grid[i]===0) unknown.push(i);
   if(!unknown.length){ toast('没有空格了'); return; }
-  let pick=-1;
-  if(!S.mosaik){    // 经典：先用求解器找一个“可推理”的格子
-    const flat=S.grid.map(v=>v===1?1:v===2?0:-1);
-    const grid=[]; for(let r=0;r<S.h;r++) grid.push(flat.slice(r*S.w,(r+1)*S.w));
-    const res=NG.solveClassic(S.rowClues,S.colClues,grid);
-    if(!res.contradiction){
-      for(let r=0;r<S.h;r++) for(let c=0;c<S.w;c++){
-        const i=r*S.w+c;
-        if(flat[i]===-1&&res.grid[r][c]!==-1){ pick=i; break; }
-      }
+  // 优先揭示「靠推理一定能定下来」的格子——这是提示按钮本身承诺的行为
+  let pick=-1, deduced=false;
+  const {flat,res}=deduce();
+  if(!res.contradiction){
+    for(let r=0;r<S.h;r++) for(let c=0;c<S.w;c++){
+      const i=r*S.w+c;
+      if(flat[i]!==-1||res.grid[r][c]===-1) continue;
+      // 推出「填」而当前未填、或推出「空」——两者都能给出可见的反馈
+      if((res.grid[r][c]===1&&S.grid[i]!==1)||res.grid[r][c]===0){ pick=i; deduced=true; break; }
+      if(pick<0) pick=i;
     }
   }
   if(pick<0) pick=unknown[Math.floor(Math.random()*unknown.length)];
   S.hints++; sfx('hint');
-  S.grid[pick]=S.sol[pick]; applyCellEl(pick);
+  // 推成「空」时打 ✕ 而不是留白：状态 0 同时表示「未涂」和「空」，留白看不出提示生效过
+  S.grid[pick]=S.sol[pick]===1?1:2;
+  applyCellEl(pick);
   const el=boardEl.querySelector(`.cell[data-i="${pick}"]`);
   el.classList.remove('new'); void el.offsetWidth; el.classList.add('new');
+  toast(deduced?'推理出一个格子':'（暂时推不动，揭示一个正确格子）',1400);
   startTimer(); hudRefresh(); checkWin(); saveNow();
 }
 let demoToken=0;
@@ -1444,42 +1584,32 @@ async function demo(){
   S.demoBusy=true; demoToken++;
   const token=demoToken;
   toast('演示推理中…');
-  if(!S.mosaik){
-    let guard=0;
-    while(guard++<400){
-      if(token!==demoToken) return;
-      const flat=S.grid.map(v=>v===1?1:v===2?0:-1);
-      const grid=[]; for(let r=0;r<S.h;r++) grid.push(flat.slice(r*S.w,(r+1)*S.w));
-      const res=NG.solveClassic(S.rowClues,S.colClues,grid);
-      const newly=[];
-      if(!res.contradiction){
-        for(let r=0;r<S.h;r++) for(let c=0;c<S.w;c++){
-          const i=r*S.w+c;
-          if(flat[i]===-1&&res.grid[r][c]!==-1) newly.push([i,res.grid[r][c]]);
-        }
+  let guard=0;
+  while(guard++<400){
+    if(token!==demoToken) return;
+    const {flat,res}=deduce();
+    const newly=[];
+    if(!res.contradiction){
+      for(let r=0;r<S.h;r++) for(let c=0;c<S.w;c++){
+        const i=r*S.w+c;
+        if(flat[i]===-1&&res.grid[r][c]!==-1) newly.push([i,res.grid[r][c]]);
       }
-      if(!newly.length){
-        for(let i=0;i<S.sol.length;i++) if(S.grid[i]===0){ newly.push([i,S.sol[i]]); if(newly.length>=3) break; }
-      }
-      if(!newly.length) break;
-      for(const [i,v] of newly){
-        if(token!==demoToken) return;
-        S.grid[i]=v===1?1:2; applyCellEl(i);
-        const el=boardEl.querySelector(`.cell[data-i="${i}"]`);
-        el.classList.remove('new'); void el.offsetWidth; el.classList.add('new');
-        await sleep(26);
-      }
-      sfx('mark');
-      checkWin();
-      if(S.done) break;
     }
-  }else{
-    for(let i=0;i<S.sol.length;i++){
-      if(token!==demoToken) return;
-      if(S.grid[i]!==1&&S.sol[i]===1){ S.grid[i]=1; applyCellEl(i); await sleep(14); if(i%8===0) sfx('mark'); }
-      if(S.done) break;
+    if(!newly.length){
+      // 约束传播推不动了：直接揭示剩余的正确填充，保证演示总能走完
+      for(let i=0;i<S.sol.length;i++) if(S.sol[i]===1&&S.grid[i]!==1){ newly.push([i,1]); if(newly.length>=3) break; }
     }
+    if(!newly.length) break;
+    for(const [i,v] of newly){
+      if(token!==demoToken) return;
+      S.grid[i]=v===1?1:2; applyCellEl(i);
+      const el=boardEl.querySelector(`.cell[data-i="${i}"]`);
+      el.classList.remove('new'); void el.offsetWidth; el.classList.add('new');
+      await sleep(24);
+    }
+    sfx('mark');
     checkWin();
+    if(S.done) break;
   }
   S.demoBusy=false;
   if(token===demoToken) toast('演示完毕');
@@ -1487,17 +1617,18 @@ async function demo(){
 
 /* ================= 每日挑战 ================= */
 function ymd(d){ return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
-function dailyKey(){ return 'd'+ymd(new Date()); }
-function startDaily(){
-  const seed=dailyKey(); const date=new Date();
-  const dow=date.getDay();
-  const mode=(dow%2===0)?'classic':'mosaik';
-  const rng=NG.mulberry32(seed);
+function dailyKey(d){ return 'd'+ymd(d||new Date()); }
+// 种子必须过一遍 NG.hashSeed：'d20260914' 直接喂给 mulberry32 会被 `>>> 0` 变成 0，
+// 那样每天的种子都一样，「全服同题」就退化成「全服永远同一题」（实测：隔一天就重复）。
+function startDaily(when){
+  const date=(when instanceof Date)?when:new Date();
+  const dk=dailyKey(date);
+  const mode=(date.getDay()%2===0)?'classic':'mosaik';
+  const rng=NG.mulberry32(NG.hashSeed(dk));
   const wh=mode==='classic'?10:8;
-  const w=wh, h=wh;
   let g=null;
   for(let t=0;t<120;t++){
-    const r=mode==='classic'?NG.generateClassic(w,h,rng,60):NG.mosaikGenerate(w,h,rng,60);
+    const r=mode==='classic'?NG.generateClassic(wh,wh,rng,60):NG.mosaikGenerate(wh,wh,rng,60);
     if(r.unique){
       const conv=r.solution.flatMap(rr=>[...rr].map(ch=>ch==='#'?1:0));
       if(mode==='classic'){ const cl=NG.cluesFromSolution(r.solution); g={sol:conv, rowClues:cl.rowClues, colClues:cl.colClues}; }
@@ -1506,8 +1637,14 @@ function startDaily(){
     }
   }
   if(!g){ toast('今日谜题生成失败'); return; }
-  startPuzzle({mode, sol:g.sol, rowClues:g.rowClues, colClues:g.colClues, clues:g.clues, w, h,
-    name:ymd(new Date()).toString().replace(/(\d{4})(\d{2})(\d{2})/,'$1.$2.$3'), key:'daily-'+seed, daily:true, mosaik:mode==='mosaik'});
+  startPuzzle({mode, sol:g.sol, rowClues:g.rowClues, colClues:g.colClues, clues:g.clues, w:wh, h:wh,
+    name:String(ymd(date)).replace(/(\d{4})(\d{2})(\d{2})/,'$1.$2.$3'),
+    key:'daily-'+dk, daily:true, mosaik:mode==='mosaik', dk});
+  // 存档里每天都写 done / best / plays，但以前从来没被读过——现在把它显示出来
+  const rec=SAVE.daily[dk];
+  toast(rec&&rec.done
+    ? `今日已完成 · 最佳 ${fmtT(rec.best)}${rec.plays>1?` · 累计挑战 ${rec.plays} 次`:''}`
+    : '今日挑战 · 全服同题',rec&&rec.done?2600:1600);
 }
 
 /* ================= 画廊 ================= */
@@ -1597,17 +1734,21 @@ addEventListener('resize',()=>{ if(S.sol.length) buildBoard(); });
 /* ================= 调试 API ================= */
 window.__nong={
   state:()=>({mode:S.mode,w:S.w,h:S.h,done:S.done,strikes:S.strikes,hints:S.hints,elapsed:S.elapsed,key:S.key,
+    daily:S.daily, dk:S.dk, mosaik:S.mosaik, name:S.name,
+    onBtn:document.querySelector('#modeSeg button.on')?.dataset.mode,
+    puzzleName:$('#puzzleName').textContent,
     mismatch:S.grid.reduce((a,v,i)=>a+((S.sol[i]===1)!==(v===1)?1:0),0)}),
   dims:()=>({w:S.w,h:S.h}),
   solArr:()=>S.sol.slice(),
   gridArr:()=>S.grid.slice(),
+  clues:()=>S.mosaik?S.clues.map(r=>r.slice()):null,
   fillAllCorrect(){ for(let i=0;i<S.sol.length;i++) S.grid[i]=S.sol[i]; applyAllCells(); checkWin(); },
   fillCell:(r,c,v)=>{ const i=r*S.w+c; S.grid[i]=v; applyCellEl(i); checkWin(); },
   cur:(r,c)=>S.grid[r*S.w+c],
   sol:(r,c)=>S.sol[r*S.w+c],
   gen:(mode,w,h)=>genRandom(mode,w,h),
-  startDaily, newRandomPuzzle, hint,
-  version:'1.0',
+  startDaily, newRandomPuzzle, hint, demo, deducePick:()=>{const {flat,res}=deduce();return {flat,res};},
+  dailyKey, version:'1.1',
 };
 
 /* ================= 启动 ================= */

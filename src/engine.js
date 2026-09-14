@@ -12,9 +12,29 @@
 
 /* ==================== 确定性随机 ==================== */
 
-// mulberry32 PRNG：mulberry32(seed) 返回 () => [0,1) 的确定性随机函数
+/*
+ * FNV-1a 32 位字符串散列。
+ *
+ * 存在的理由：把非数字种子里直接喂给 mulberry32 会踩一个静默的坑——
+ * `'d20260914' >>> 0` 先 ToNumber 得到 NaN、再 ToUint32 得到 0，
+ * 于是「按日期定种子」的每一颗种子都塌成同一个 0，每日挑战永远出同一道题。
+ * 任何字符串种子都应该先过一遍这里。
+ */
+function hashSeed(str) {
+  const s = String(str);
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  // 散列撞到 0 时换一个非零常量，避免与「缺省种子」撞车
+  return h === 0 ? 0x9e3779b9 : h;
+}
+
+// mulberry32 PRNG：mulberry32(seed) 返回 () => [0,1) 的确定性随机函数。
+// seed 为数字时按 uint32 解释；为字符串时先经 hashSeed 散列。
 function mulberry32(seed) {
-  let a = seed >>> 0;
+  let a = typeof seed === 'string' ? hashSeed(seed) : seed >>> 0;
   return function () {
     a = (a + 0x6D2B79F5) | 0;
     let t = a;
@@ -543,10 +563,92 @@ function mosaikGenerate(w, h, rng, maxAttempts) {
   return { solution: null, clues: null, unique: false };
 }
 
+/* ==================== 马赛克：约束传播 ==================== */
+
+/*
+ * 马赛克约束传播（原地修改 grid）。
+ *
+ * 每个线索格 (x,y) 给出的数字，是它 3×3 邻域（越界裁剪）内填充格的总数。
+ * 设该邻域内「已确定填充」数为 filled、「未确定」数为 unknown，则必须有
+ *      filled ≤ clue ≤ filled + unknown
+ * 两端取等时即可定死整片邻域：
+ *   clue === filled            → 邻域内所有未定格必为空（置 0）
+ *   clue === filled + unknown  → 邻域内所有未定格必为填充（置 1）
+ * 新定的格子会改变相邻线索格的 filled，故反复迭代到不动点。
+ *
+ * 返回 'solved'（无未知且无矛盾）| 'open'（仍有未知）| 'contradiction'
+ */
+function mosaikPropagate(clues, grid) {
+  const h = clues.length;
+  const w = h > 0 ? clues[0].length : 0;
+  if (h === 0 || w === 0) return 'solved';
+
+  const yLo = new Int32Array(h), yHi = new Int32Array(h);
+  for (let y = 0; y < h; y++) { yLo[y] = y > 0 ? y - 1 : 0; yHi[y] = y < h - 1 ? y + 1 : h - 1; }
+  const xLo = new Int32Array(w), xHi = new Int32Array(w);
+  for (let x = 0; x < w; x++) { xLo[x] = x > 0 ? x - 1 : 0; xHi[x] = x < w - 1 ? x + 1 : w - 1; }
+
+  for (;;) {
+    let changed = false;
+    for (let y = 0; y < h; y++) {
+      const y0 = yLo[y], y1 = yHi[y];
+      for (let x = 0; x < w; x++) {
+        const clue = clues[y][x];
+        const x0 = xLo[x], x1 = xHi[x];
+        let filled = 0, unknown = 0;
+        for (let yy = y0; yy <= y1; yy++) {
+          const row = grid[yy];
+          for (let xx = x0; xx <= x1; xx++) {
+            const v = row[xx];
+            if (v === 1) filled++;
+            else if (v === -1) unknown++;
+          }
+        }
+        if (filled > clue || filled + unknown < clue) return 'contradiction';
+        if (unknown === 0) continue;
+        let to;
+        if (filled === clue) to = 0;
+        else if (filled + unknown === clue) to = 1;
+        else continue;
+        for (let yy = y0; yy <= y1; yy++) {
+          const row = grid[yy];
+          for (let xx = x0; xx <= x1; xx++) if (row[xx] === -1) { row[xx] = to; changed = true; }
+        }
+      }
+    }
+    if (!changed) break;
+  }
+
+  for (let y = 0; y < h; y++) {
+    const row = grid[y];
+    for (let x = 0; x < w; x++) if (row[x] === -1) return 'open';
+  }
+  return 'solved';
+}
+
+// mosaikSolve(clues, grid?) → { solved, grid, contradiction }
+// 与 solveClassic 同形：复制一份再传播，不修改传入的 grid。
+function mosaikSolve(clues, grid) {
+  const h = clues.length;
+  const w = h > 0 ? clues[0].length : 0;
+  const g = new Array(h);
+  for (let y = 0; y < h; y++) {
+    if (grid) g[y] = grid[y].slice();
+    else {
+      const row = new Array(w);
+      for (let x = 0; x < w; x++) row[x] = -1;
+      g[y] = row;
+    }
+  }
+  const st = mosaikPropagate(clues, g);
+  return { solved: st === 'solved', grid: g, contradiction: st === 'contradiction' };
+}
+
 /* ==================== 导出 ==================== */
 
 const API = {
   mulberry32,
+  hashSeed,
   cluesFromSolution,
   solveLine,
   solveClassic,
@@ -555,6 +657,8 @@ const API = {
   mosaikCluesFromSolution,
   mosaikCountSolutions,
   mosaikGenerate,
+  mosaikPropagate,
+  mosaikSolve,
 };
 
 if (typeof module !== 'undefined' && module.exports) { module.exports = API; }

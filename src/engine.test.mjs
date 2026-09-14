@@ -35,9 +35,10 @@ function hrMs(t0) {
 /* ==================== 0. API 形状 & mulberry32 ==================== */
 {
   for (const name of [
-    'mulberry32', 'cluesFromSolution', 'solveLine', 'solveClassic',
+    'mulberry32', 'hashSeed', 'cluesFromSolution', 'solveLine', 'solveClassic',
     'countSolutions', 'generateClassic',
     'mosaikCluesFromSolution', 'mosaikCountSolutions', 'mosaikGenerate',
+    'mosaikPropagate', 'mosaikSolve',
   ]) {
     assert.equal(typeof NG[name], 'function', `API.${name} 应为函数`);
   }
@@ -247,6 +248,141 @@ for (const [w, h, seeds] of [[6, 6, 30], [8, 8, 30]]) {
 
   console.log(`     平均 ${avg.toFixed(2)}ms/次`);
   if (w === 8) assert.ok(avg <= 50, `mosaikGenerate(8,8) 平均耗时 ${avg.toFixed(2)}ms 超过 50ms`);
+}
+
+/* ==================== 7. hashSeed / 字符串种子 ==================== */
+{
+  assert.equal(typeof NG.hashSeed, 'function', 'API.hashSeed 应为函数');
+  assert.equal(NG.hashSeed('d20260914'), NG.hashSeed('d20260914'), '散列应确定');
+  assert.notEqual(NG.hashSeed('d20260914'), NG.hashSeed('d20260915'), '相邻日期散列应不同');
+  assert.ok(NG.hashSeed('d20260914') > 0, '散列应为正整数');
+
+  // 回归：字符串种子直接喂给 mulberry32 时，'d20260914' >>> 0 === 0，
+  // 于是所有日期共用同一个种子（每日挑战实际只有一道题在循环）。
+  assert.equal('d20260914' >>> 0, 0, '前提：字符串直接 >>> 0 会塌成 0');
+  const a = mulberry32('d20260914'), b = mulberry32('d20260915');
+  assert.notDeepEqual([a(), a(), a()], [b(), b(), b()], '不同日期字符串应产生不同随机序列');
+
+  // 同字符串仍确定；数字种子行为不变
+  const c1 = mulberry32('d20260914'), c2 = mulberry32('d20260914');
+  for (let i = 0; i < 50; i++) assert.equal(c1(), c2());
+  const n1 = mulberry32(42), n2 = mulberry32(42);
+  for (let i = 0; i < 50; i++) assert.equal(n1(), n2());
+
+  // 28 个连续日期种子两两不同
+  const seeds = [];
+  for (let d = 1; d <= 28; d++) seeds.push(NG.hashSeed('d2026' + (900 + d) + String(d).padStart(2, '0')));
+  assert.equal(new Set(seeds).size, 28, '28 个日期种子应互不相同');
+  console.log('[ok] hashSeed + mulberry32 字符串种子');
+}
+
+/* ==================== 8. mosaikSolve（约束传播）手工例 ==================== */
+{
+  assert.equal(typeof NG.mosaikPropagate, 'function', 'API.mosaikPropagate 应为函数');
+  assert.equal(typeof NG.mosaikSolve, 'function', 'API.mosaikSolve 应为函数');
+
+  const g = (rows) => NG.mosaikSolve(rows).grid;
+  assert.deepEqual(g([[1]]), [[1]]);                        // 1x1 线索 1 → 必填
+  assert.deepEqual(g([[0]]), [[0]]);                        // 1x1 线索 0 → 必空
+  assert.deepEqual(g([[2]]).length, 1);
+  assert.equal(NG.mosaikSolve([[2]]).contradiction, true);  // 1x1 邻域只 1 格，填不了 2
+  assert.deepEqual(g([[2, 2]]), [[1, 1]]);                  // 互为邻域、线索 2 → 两格都填
+  assert.deepEqual(g([[0, 0], [0, 0]]), [[0, 0], [0, 0]]);  // 全 0 → 全空
+  assert.deepEqual(g([[4, 6, 4], [6, 9, 6], [4, 6, 4]]), [[1, 1, 1], [1, 1, 1], [1, 1, 1]]);
+
+  // 不修改传入 grid
+  const src = [[-1, -1], [-1, -1]];
+  const snap = src.map((r) => r.slice());
+  NG.mosaikSolve([[3, 3], [3, 3]], src);
+  assert.deepEqual(src, snap, 'mosaikSolve 不应修改传入 grid');
+
+  // 对真实马赛克局：传播推出的每一格都必须与解一致，且不得误报矛盾
+  for (let seed = 1; seed <= 10; seed++) {
+    const mg = mosaikGenerate(6, 6, mulberry32(seed), 300);
+    const res = NG.mosaikSolve(mg.clues);
+    assert.equal(res.contradiction, false, `seed=${seed} 传播不应报矛盾`);
+    for (let y = 0; y < 6; y++) {
+      for (let x = 0; x < 6; x++) {
+        const v = res.grid[y][x];
+        if (v === -1) continue;
+        assert.equal(v, mg.solution[y][x] === '#' ? 1 : 0, `seed=${seed} (${x},${y}) 推导与解不符`);
+      }
+    }
+  }
+  console.log('[ok] mosaikSolve 手工例 + 与真实唯一解一致');
+}
+
+/* ==================== 9. mosaikPropagate 可靠性（对照暴力枚举） ==================== */
+{
+  // 暴力枚举该线索下所有 0/1 盘面解
+  function brute(clues) {
+    const h = clues.length, w = clues[0].length, total = w * h;
+    const sols = [];
+    const b = new Uint8Array(total);
+    for (let mask = 0; mask < (1 << total); mask++) {
+      for (let i = 0; i < total; i++) b[i] = (mask >> i) & 1;
+      let ok = true;
+      for (let y = 0; y < h && ok; y++) {
+        for (let x = 0; x < w && ok; x++) {
+          const y0 = Math.max(0, y - 1), y1 = Math.min(h - 1, y + 1);
+          const x0 = Math.max(0, x - 1), x1 = Math.min(w - 1, x + 1);
+          let s = 0;
+          for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) s += b[yy * w + xx];
+          if (s !== clues[y][x]) ok = false;
+        }
+      }
+      if (ok) sols.push(b.slice());
+    }
+    return sols;
+  }
+  function cluesOf(g2, w, h) {
+    const out = [];
+    for (let y = 0; y < h; y++) {
+      const row = [];
+      for (let x = 0; x < w; x++) {
+        let s = 0;
+        for (let yy = Math.max(0, y - 1); yy <= Math.min(h - 1, y + 1); yy++)
+          for (let xx = Math.max(0, x - 1); xx <= Math.min(w - 1, x + 1); xx++) s += g2[yy * w + xx];
+        row.push(s);
+      }
+      out.push(row);
+    }
+    return out;
+  }
+
+  let checked = 0, deduced = 0;
+  const rng = mulberry32(20260914);
+  for (const [w, h, n] of [[3, 3, 512], [4, 4, 300], [3, 5, 200]]) {
+    for (let t = 0; t < n; t++) {
+      let raw;
+      if (w === 3 && h === 3) {           // 3x3 全枚举 512 个盘面
+        raw = new Uint8Array(9);
+        for (let i = 0; i < 9; i++) raw[i] = (t >> i) & 1;
+      } else {
+        raw = new Uint8Array(w * h);
+        for (let i = 0; i < w * h; i++) raw[i] = rng() < 0.5 ? 1 : 0;
+      }
+      const clues = cluesOf(raw, w, h);
+      const sols = brute(clues);
+      if (sols.length === 0) continue;
+      const res = NG.mosaikSolve(clues);
+      checked++;
+      assert.equal(res.contradiction, false, `有解却报矛盾: ${JSON.stringify(clues)}`);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const v = res.grid[y][x];
+          if (v === -1) continue;
+          deduced++;
+          for (const s of sols) {
+            assert.equal(s[y * w + x], v, `推导不可靠: clues=${JSON.stringify(clues)} (${x},${y}) 推出 ${v}`);
+          }
+        }
+      }
+      if (res.solved) assert.equal(sols.length, 1, '声称 solved 时解必须唯一');
+    }
+  }
+  assert.ok(checked > 900, `抽样量偏少: ${checked}`);
+  console.log(`[ok] mosaikPropagate 可靠性：${checked} 组线索、${deduced} 个推导，全部与暴力枚举一致`);
 }
 
 console.log('ALL TESTS PASSED');
